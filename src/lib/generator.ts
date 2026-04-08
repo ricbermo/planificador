@@ -49,6 +49,9 @@ export function mealGrams(item: MealItem): number {
   return FOODS_BY_ID[item.foodId].baseGrams * item.multiplier;
 }
 
+const itemsKcal = (items: MealItem[]): number =>
+  items.reduce((sum, item) => sum + itemKcal(item), 0);
+
 const clampMult = (food: Food, m: number): number => {
   const min = food.minMultiplier ?? 0.5;
   let max = food.maxMultiplier ?? 5;
@@ -60,6 +63,22 @@ const clampMult = (food: Food, m: number): number => {
 
 const round = (m: number, step: number): number =>
   Math.round(m / step) * step;
+
+const foodMaxMultiplier = (food: Food): number => {
+  let max = food.maxMultiplier ?? 5;
+  if (food.maxGrams !== undefined && food.baseGrams > 0) {
+    max = Math.min(max, food.maxGrams / food.baseGrams);
+  }
+  return max;
+};
+
+const normalizeItemMultiplier = (item: MealItem): MealItem => {
+  const food = FOODS_BY_ID[item.foodId];
+  return {
+    ...item,
+    multiplier: roundMultiplier(food, clampMult(food, item.multiplier)),
+  };
+};
 
 // ──────────────────────────────────────────────────────────────────────────
 // Pools por slot/role
@@ -176,6 +195,31 @@ function buildBreakfast({ budget }: BuildArgs): MealItem[] {
   return scaleToBudget(items, budget);
 }
 
+function topUpMealToBudget(
+  items: MealItem[],
+  budget: number,
+  slot: 'lunch' | 'dinner',
+): MealItem[] {
+  let scaled = scaleToBudget(items, budget);
+
+  for (let attempt = 0; attempt < 3 && itemsKcal(scaled) < budget * 0.95; attempt++) {
+    const enriched = scaled.slice();
+
+    if (!enriched.some((item) => item.foodId === 'olive-oil')) {
+      enriched.push({ foodId: 'olive-oil', multiplier: 0.5 });
+    } else {
+      const existingIds = new Set(enriched.map((item) => item.foodId));
+      const extraCarbPool = carbsForMeal(slot).filter((food) => !existingIds.has(food.id));
+      if (extraCarbPool.length === 0) break;
+      enriched.push({ foodId: rand(extraCarbPool).id, multiplier: 1 });
+    }
+
+    scaled = scaleToBudget(enriched, budget);
+  }
+
+  return scaled;
+}
+
 function buildLunch({ budget, dayMeat, useDayMeat }: BuildArgs): MealItem[] {
   const items: MealItem[] = [];
 
@@ -196,7 +240,7 @@ function buildLunch({ budget, dayMeat, useDayMeat }: BuildArgs): MealItem[] {
     items.push({ foodId: 'olive-oil', multiplier: 0.5 });
   }
 
-  return scaleToBudget(items, budget);
+  return topUpMealToBudget(items, budget, 'lunch');
 }
 
 function buildDinner({
@@ -224,14 +268,12 @@ function buildDinner({
     // plate
     const protein = rand(proteinsForMeal('dinner', dayMeat, useDayMeat));
     items.push({ foodId: protein.id, multiplier: 1.5 });
-    if (Math.random() > 0.4) {
-      const carb = rand(carbsForMeal('dinner'));
-      items.push({ foodId: carb.id, multiplier: 1.5 });
-    }
+    const carb = rand(carbsForMeal('dinner'));
+    items.push({ foodId: carb.id, multiplier: 1.5 });
     items.push({ foodId: rand(vegsForMeal('dinner')).id, multiplier: 1 });
   }
 
-  return scaleToBudget(items, budget);
+  return topUpMealToBudget(items, budget, 'dinner');
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -249,41 +291,130 @@ function buildDinner({
 function scaleToBudget(items: MealItem[], budget: number): MealItem[] {
   if (items.length === 0 || budget <= 0) return items;
 
+  const scaledItems = items.map(normalizeItemMultiplier);
+
   const totalKcal = (its: MealItem[]) =>
     its.reduce((s, i) => s + itemKcal(i), 0);
 
-  const adjustItem = (idx: number, gap: number) => {
-    const it = items[idx];
+  const adjustItem = (idx: number, gap: number): boolean => {
+    const it = scaledItems[idx];
     const food = FOODS_BY_ID[it.foodId];
-    if (food.kcal === 0) return;
+    if (food.kcal === 0) return false;
+    const prev = it.multiplier;
     const deltaMult = gap / food.kcal;
     const next = clampMult(food, it.multiplier + deltaMult);
-    items[idx] = { ...it, multiplier: roundMultiplier(food, next) };
+    scaledItems[idx] = { ...it, multiplier: roundMultiplier(food, next) };
+    return Math.abs(scaledItems[idx].multiplier - prev) > 0.001;
   };
 
   // Prioridad de targets para cuadrar: carb principal → proteína principal
-  const carbIdx = items.findIndex((i) => FOODS_BY_ID[i.foodId].role === 'carb');
-  const proteinIdx = items.findIndex(
+  const carbIdx = scaledItems.findIndex((i) => FOODS_BY_ID[i.foodId].role === 'carb');
+  const proteinIdx = scaledItems.findIndex(
     (i) => FOODS_BY_ID[i.foodId].role === 'protein',
   );
 
   for (let pass = 0; pass < 4; pass++) {
-    const cur = totalKcal(items);
+    const cur = totalKcal(scaledItems);
     const gap = budget - cur;
     if (Math.abs(gap) / budget < 0.05) break;
 
+    let moved = false;
     if (carbIdx >= 0) {
-      adjustItem(carbIdx, gap);
-      continue;
+      moved = adjustItem(carbIdx, gap);
     }
-    if (proteinIdx >= 0) {
-      adjustItem(proteinIdx, gap);
-      continue;
+
+    if (!moved && proteinIdx >= 0) {
+      moved = adjustItem(proteinIdx, gap);
     }
-    break;
+
+    if (!moved) {
+      break;
+    }
+
   }
 
-  return items;
+  return scaledItems.map(normalizeItemMultiplier);
+}
+
+function proteinForMealItems(items: MealItem[]): number {
+  return items.reduce((sum, item) => {
+    const food = FOODS_BY_ID[item.foodId];
+    return sum + (food.protein * item.multiplier);
+  }, 0);
+}
+
+function totalProteinForMeals(meals: Meal[]): number {
+  return meals.reduce((sum, meal) => sum + proteinForMealItems(meal.items), 0);
+}
+
+function proteinRolePriority(food: Food): number {
+  if (food.role === 'protein') return 0;
+  if (food.role === 'shake') return 1;
+  if (food.tags.includes('protein')) return 2;
+  return 3;
+}
+
+function enforceMinProteinTarget(
+  meals: Meal[],
+  budgets: Record<MealSlot, number>,
+  minProteinTarget: number,
+): void {
+  if (minProteinTarget <= 0) return;
+
+  for (let pass = 0; pass < 16; pass++) {
+    const currentProtein = totalProteinForMeals(meals);
+    const deficit = minProteinTarget - currentProtein;
+    if (deficit <= 0.5) return;
+
+    const candidates = meals.flatMap((meal, mealIndex) =>
+      (meal.done ? [] :
+      meal.items
+        .map((item, itemIndex) => {
+          const food = FOODS_BY_ID[item.foodId];
+          const maxRounded = roundMultiplier(food, foodMaxMultiplier(food));
+          const headroom = maxRounded - item.multiplier;
+          if (headroom <= 0.001 || food.protein <= 0) return null;
+          return {
+            mealIndex,
+            itemIndex,
+            rolePriority: proteinRolePriority(food),
+            proteinPerStep: food.protein,
+          };
+        })
+        .filter((c): c is NonNullable<typeof c> => c !== null)),
+    );
+
+    if (candidates.length === 0) return;
+
+    candidates.sort((a, b) =>
+      a.rolePriority - b.rolePriority || b.proteinPerStep - a.proteinPerStep,
+    );
+
+    let improved = false;
+
+    for (const candidate of candidates) {
+      const meal = meals[candidate.mealIndex];
+      const item = meal.items[candidate.itemIndex];
+      const food = FOODS_BY_ID[item.foodId];
+      const target = clampMult(food, item.multiplier + (deficit / food.protein));
+      const nextMultiplier = roundMultiplier(food, target);
+      if (nextMultiplier <= item.multiplier + 0.001) continue;
+
+      const beforeProtein = proteinForMealItems(meal.items);
+      const nextItems = meal.items.slice();
+      nextItems[candidate.itemIndex] = { ...item, multiplier: nextMultiplier };
+      const rescaled = scaleToBudget(nextItems, budgets[meal.slot]);
+      const afterProtein = proteinForMealItems(rescaled);
+
+      if (afterProtein <= beforeProtein + 0.1) continue;
+
+      meal.items = rescaled;
+      improved = true;
+      break;
+    }
+
+    if (!improved) return;
+  }
 }
 
 /**
@@ -327,6 +458,7 @@ export interface GenerateOptions {
   targetKcal: number;
   remainingKcal?: number;
   dayMeat: DayMeat;
+  minProteinTarget?: number;
   // Si se pasa, conserva las comidas done y reroll-ea las pendientes
   existing?: Meal[];
   // Override por slot si el usuario cambió el toggle "usar proteína del día"
@@ -341,10 +473,60 @@ const DEFAULT_USE_DAY_MEAT: Record<MealSlot, boolean> = {
   dinner: false,
 };
 
-export function generateDay({
+const MIN_RANGE_PCT = 95;
+const MAX_RANGE_PCT = 105;
+const MAX_GENERATION_ATTEMPTS = 30;
+
+interface PlanEvaluation {
+  ok: boolean;
+  score: number;
+}
+
+function planKcal(meals: Meal[]): number {
+  return meals.reduce((sum, meal) => sum + mealKcal(meal), 0);
+}
+
+function planKcalP2(meals: Meal[]): number {
+  return meals.reduce((sum, meal) => sum + mealKcalP2(meal), 0);
+}
+
+function pctPenalty(value: number, min: number, max: number): number {
+  if (value < min) return min - value;
+  if (value > max) return value - max;
+  return 0;
+}
+
+function evaluatePlan(meals: Meal[], opts: GenerateOptions): PlanEvaluation {
+  const budgetP1 = opts.remainingKcal ?? opts.targetKcal;
+  const kcal = planKcal(meals);
+  const pct = budgetP1 > 0 ? (kcal / budgetP1) * 100 : 100;
+  const kcalPenalty = pctPenalty(pct, MIN_RANGE_PCT, MAX_RANGE_PCT);
+
+  const protein = totalProteinForMeals(meals);
+  const proteinPenalty =
+    opts.minProteinTarget !== undefined && opts.minProteinTarget > 0
+      ? Math.max(0, opts.minProteinTarget - protein)
+      : 0;
+
+  let p2Penalty = 0;
+  if (opts.remainingKcalP2 !== undefined && opts.remainingKcalP2 > 0) {
+    const kcalP2 = planKcalP2(meals);
+    const pctP2 = (kcalP2 / opts.remainingKcalP2) * 100;
+    p2Penalty = pctPenalty(pctP2, MIN_RANGE_PCT, MAX_RANGE_PCT);
+  }
+
+  const score = kcalPenalty * 100 + p2Penalty * 80 + proteinPenalty;
+  return {
+    ok: kcalPenalty === 0 && p2Penalty === 0 && proteinPenalty <= 0.001,
+    score,
+  };
+}
+
+function buildDayOnce({
   targetKcal,
   remainingKcal,
   dayMeat,
+  minProteinTarget,
   existing,
   useDayMeatOverride,
   remainingKcalP2,
@@ -387,6 +569,10 @@ export function generateDay({
     }
   }
 
+  if (minProteinTarget !== undefined && minProteinTarget > 0) {
+    enforceMinProteinTarget(baseMeals, budgets, minProteinTarget);
+  }
+
   // Persona 2: re-usar foods, recalcular multipliers
   if (remainingKcalP2 !== undefined && remainingKcalP2 > 0) {
     const budgetsP2 = splitKcal(remainingKcalP2, baseMeals);
@@ -411,6 +597,45 @@ export function generateDay({
   }
 
   return baseMeals;
+}
+
+export function generateDay({
+  targetKcal,
+  remainingKcal,
+  dayMeat,
+  minProteinTarget,
+  existing,
+  useDayMeatOverride,
+  remainingKcalP2,
+}: GenerateOptions): Meal[] {
+  const options: GenerateOptions = {
+    targetKcal,
+    remainingKcal,
+    dayMeat,
+    minProteinTarget,
+    existing,
+    useDayMeatOverride,
+    remainingKcalP2,
+  };
+
+  let bestMeals = buildDayOnce(options);
+  let bestEval = evaluatePlan(bestMeals, options);
+  if (bestEval.ok) return bestMeals;
+
+  const hasPendingMeals = bestMeals.some((meal) => !meal.done);
+  if (!hasPendingMeals) return bestMeals;
+
+  for (let attempt = 1; attempt < MAX_GENERATION_ATTEMPTS; attempt++) {
+    const candidate = buildDayOnce(options);
+    const candidateEval = evaluatePlan(candidate, options);
+    if (candidateEval.ok) return candidate;
+    if (candidateEval.score < bestEval.score) {
+      bestMeals = candidate;
+      bestEval = candidateEval;
+    }
+  }
+
+  return bestMeals;
 }
 
 /**

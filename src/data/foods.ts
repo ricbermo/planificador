@@ -11,7 +11,7 @@ export const FOODS: Food[] = [
     kcal: 165, protein: 31, carb: 0, fat: 3.6,
     tags: ['protein', 'meat-day'], meals: ['lunch', 'dinner'],
     meat: 'chicken', role: 'protein',
-    minMultiplier: 1.2, maxMultiplier: 3, maxGrams: 250,
+    minMultiplier: 1.2, maxMultiplier: 2.5, maxGrams: 250,
   },
   {
     id: 'beef-lean',
@@ -20,7 +20,7 @@ export const FOODS: Food[] = [
     kcal: 180, protein: 26, carb: 0, fat: 8,
     tags: ['protein', 'meat-day'], meals: ['lunch', 'dinner'],
     meat: 'beef', role: 'protein',
-    minMultiplier: 1.2, maxMultiplier: 3, maxGrams: 250,
+    minMultiplier: 1.2, maxMultiplier: 2.5, maxGrams: 250,
   },
   {
     id: 'pork-loin',
@@ -29,7 +29,7 @@ export const FOODS: Food[] = [
     kcal: 175, protein: 27, carb: 0, fat: 7,
     tags: ['protein', 'meat-day'], meals: ['lunch', 'dinner'],
     meat: 'pork', role: 'protein',
-    minMultiplier: 1.2, maxMultiplier: 3, maxGrams: 250,
+    minMultiplier: 1.2, maxMultiplier: 2.5, maxGrams: 250,
   },
 
   // ───── proteínas "secundarias" ─────
@@ -116,7 +116,7 @@ export const FOODS: Food[] = [
     kcal: 130, protein: 2.7, carb: 28, fat: 0.3,
     tags: ['carb'], meals: ['lunch', 'dinner'],
     role: 'carb',
-    minMultiplier: 1.5, maxMultiplier: 4, maxGrams: 250,
+    minMultiplier: 1, maxMultiplier: 2, maxGrams: 200,
   },
   {
     id: 'potato',
@@ -125,7 +125,7 @@ export const FOODS: Food[] = [
     kcal: 87, protein: 1.9, carb: 20, fat: 0.1,
     tags: ['carb'], meals: ['lunch', 'dinner'],
     role: 'carb',
-    minMultiplier: 2, maxMultiplier: 5, maxGrams: 300,
+    minMultiplier: 1.25, maxMultiplier: 2.5, maxGrams: 250,
   },
   {
     id: 'cassava',
@@ -134,7 +134,7 @@ export const FOODS: Food[] = [
     kcal: 160, protein: 1.4, carb: 38, fat: 0.3,
     tags: ['carb'], meals: ['lunch', 'dinner'],
     role: 'carb',
-    minMultiplier: 1.5, maxMultiplier: 4, maxGrams: 250,
+    minMultiplier: 1, maxMultiplier: 2, maxGrams: 200,
   },
   {
     id: 'lentils',
@@ -143,7 +143,7 @@ export const FOODS: Food[] = [
     kcal: 116, protein: 9, carb: 20, fat: 0.4,
     tags: ['carb', 'protein'], meals: ['lunch', 'dinner'],
     role: 'carb',
-    minMultiplier: 1.5, maxMultiplier: 3, maxGrams: 250,
+    minMultiplier: 1, maxMultiplier: 2, maxGrams: 200,
   },
   {
     id: 'beans',
@@ -152,7 +152,7 @@ export const FOODS: Food[] = [
     kcal: 127, protein: 8.7, carb: 23, fat: 0.5,
     tags: ['carb', 'protein'], meals: ['lunch', 'dinner'],
     role: 'carb',
-    minMultiplier: 1.5, maxMultiplier: 3, maxGrams: 250,
+    minMultiplier: 1, maxMultiplier: 2, maxGrams: 200,
   },
   {
     id: 'corn-tortilla',
@@ -161,7 +161,7 @@ export const FOODS: Food[] = [
     kcal: 65, protein: 1.5, carb: 13, fat: 0.7,
     tags: ['carb', 'bread'], meals: ['lunch', 'dinner'],
     role: 'carb',
-    minMultiplier: 2, maxMultiplier: 5,
+    minMultiplier: 2, maxMultiplier: 4,
     unit: { singular: 'tortilla', plural: 'tortillas' },
   },
   {

@@ -138,6 +138,7 @@ export default function App() {
     const meals = generateDay({
       targetKcal,
       dayMeat,
+      minProteinTarget: person1Macros?.protein_g,
       remainingKcalP2: p2Enabled ? p2TargetKcal : undefined,
     });
     setRemainingKcal(targetKcal);
@@ -171,6 +172,7 @@ export default function App() {
       targetKcal,
       remainingKcal,
       dayMeat,
+      minProteinTarget: person1Macros?.protein_g,
       existing: day.meals,
       remainingKcalP2: p2Enabled ? p2RemainingKcal : undefined,
     });
@@ -195,6 +197,7 @@ export default function App() {
       targetKcal,
       remainingKcal,
       dayMeat,
+      minProteinTarget: person1Macros?.protein_g,
       existing: cleared,
       useDayMeatOverride: { [slot]: flipped },
       remainingKcalP2: p2Enabled ? p2RemainingKcal : undefined,
@@ -232,6 +235,7 @@ export default function App() {
       targetKcal,
       remainingKcal,
       dayMeat,
+      minProteinTarget: person1Macros?.protein_g,
       existing: cleared,
       remainingKcalP2: p2Enabled ? p2RemainingKcal : undefined,
     });
