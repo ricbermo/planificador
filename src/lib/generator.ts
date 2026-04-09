@@ -27,6 +27,13 @@ export function mealProtein(meal: Meal): number {
   return meal.items.reduce((s, i) => s + itemProtein(i), 0);
 }
 
+const itemCarbs = (item: MealItem): number =>
+  FOODS_BY_ID[item.foodId].carb * item.multiplier;
+
+export function mealCarbs(meal: Meal): number {
+  return meal.items.reduce((s, i) => s + itemCarbs(i), 0);
+}
+
 const itemKcalP2 = (item: MealItem): number =>
   FOODS_BY_ID[item.foodId].kcal * (item.multiplierP2 ?? 0);
 
@@ -39,6 +46,13 @@ export function mealKcalP2(meal: Meal): number {
 
 export function mealProteinP2(meal: Meal): number {
   return meal.items.reduce((s, i) => s + itemProteinP2(i), 0);
+}
+
+const itemCarbsP2 = (item: MealItem): number =>
+  FOODS_BY_ID[item.foodId].carb * (item.multiplierP2 ?? 0);
+
+export function mealCarbsP2(meal: Meal): number {
+  return meal.items.reduce((s, i) => s + itemCarbsP2(i), 0);
 }
 
 export function itemGramsP2(item: MealItem): number {
@@ -336,6 +350,81 @@ function scaleToBudget(items: MealItem[], budget: number): MealItem[] {
   return scaledItems.map(normalizeItemMultiplier);
 }
 
+function p2MaxMultiplier(food: Food): number {
+  return Math.max(foodMaxMultiplier(food) * 2, 8);
+}
+
+function roundMultiplierP2(food: Food, m: number): number {
+  const clamped = Math.max(0, Math.min(p2MaxMultiplier(food), m));
+  if (food.unit) return Math.round(clamped);
+  return round(clamped, 0.25);
+}
+
+function normalizeItemMultiplierP2(item: MealItem): MealItem {
+  const food = FOODS_BY_ID[item.foodId];
+  return {
+    ...item,
+    multiplier: roundMultiplierP2(food, item.multiplier),
+  };
+}
+
+function scaleToBudgetP2Relaxed(items: MealItem[], budget: number): MealItem[] {
+  if (items.length === 0 || budget <= 0) return items.map((item) => ({ ...item, multiplier: 0 }));
+
+  const scaledItems = items.map(normalizeItemMultiplierP2);
+
+  const totalKcal = (its: MealItem[]) =>
+    its.reduce((sum, item) => sum + itemKcal(item), 0);
+
+  for (let pass = 0; pass < 16; pass++) {
+    const cur = totalKcal(scaledItems);
+    const gap = budget - cur;
+    if (Math.abs(gap) / budget < 0.05) break;
+
+    const candidates = scaledItems
+      .map((item, idx) => {
+        const food = FOODS_BY_ID[item.foodId];
+        const roleBoost =
+          gap >= 0
+            ? food.role === 'carb' || food.role === 'protein'
+              ? 0
+              : food.role === 'extra'
+                ? 1
+                : 2
+            : 0;
+        return {
+          idx,
+          kcal: food.kcal,
+          roleBoost,
+        };
+      })
+      .sort((a, b) =>
+        gap >= 0
+          ? a.roleBoost - b.roleBoost || b.kcal - a.kcal
+          : b.kcal - a.kcal,
+      );
+
+    let moved = false;
+
+    for (const candidate of candidates) {
+      const it = scaledItems[candidate.idx];
+      const food = FOODS_BY_ID[it.foodId];
+      if (food.kcal === 0) continue;
+      const prev = it.multiplier;
+      const deltaMult = gap / food.kcal;
+      const next = roundMultiplierP2(food, it.multiplier + deltaMult);
+      if (Math.abs(next - prev) <= 0.001) continue;
+      scaledItems[candidate.idx] = { ...it, multiplier: next };
+      moved = true;
+      break;
+    }
+
+    if (!moved) break;
+  }
+
+  return scaledItems.map(normalizeItemMultiplierP2);
+}
+
 function proteinForMealItems(items: MealItem[]): number {
   return items.reduce((sum, item) => {
     const food = FOODS_BY_ID[item.foodId];
@@ -424,6 +513,7 @@ function enforceMinProteinTarget(
 export function applyP2Multipliers(
   items: MealItem[],
   budgetP2: number,
+  allowRelaxedBounds = false,
 ): MealItem[] {
   if (items.length === 0 || budgetP2 <= 0) {
     return items.map((i) => ({ ...i, multiplierP2: 0 }));
@@ -433,7 +523,11 @@ export function applyP2Multipliers(
     foodId: i.foodId,
     multiplier: i.multiplier,
   }));
-  const scaled = scaleToBudget(clone, budgetP2);
+  let scaled = scaleToBudget(clone, budgetP2);
+  const pct = (itemsKcal(scaled) / budgetP2) * 100;
+  if (allowRelaxedBounds && (pct < MIN_RANGE_PCT || pct > MAX_RANGE_PCT)) {
+    scaled = scaleToBudgetP2Relaxed(clone, budgetP2);
+  }
   return items.map((orig, idx) => ({
     ...orig,
     multiplierP2: scaled[idx].multiplier,
@@ -581,7 +675,7 @@ function buildDayOnce({
         // Si la comida estaba congelada, conserva el multiplierP2 anterior
         continue;
       }
-      meal.items = applyP2Multipliers(meal.items, budgetsP2[meal.slot]);
+      meal.items = applyP2Multipliers(meal.items, budgetsP2[meal.slot], true);
     }
   } else {
     // Sin P2: limpiar cualquier multiplierP2 residual
@@ -681,7 +775,7 @@ export function rerollItem(
 
   let scaled = scaleToBudget(newItems, budget);
   if (budgetP2 !== undefined && budgetP2 > 0) {
-    scaled = applyP2Multipliers(scaled, budgetP2);
+    scaled = applyP2Multipliers(scaled, budgetP2, true);
   }
   return {
     ...meal,

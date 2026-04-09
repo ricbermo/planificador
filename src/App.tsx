@@ -270,9 +270,11 @@ export default function App() {
 
   const handlePerson1MetricsChange = (patch: Partial<BodyMetrics>) => {
     setPerson1Metrics((prev) => ({ ...prev, ...patch }));
+    setPerson1ManualOverride(false);
   };
   const handleP2MetricsChange = (patch: Partial<BodyMetrics>) => {
     setP2Metrics((prev) => ({ ...prev, ...patch }));
+    setP2ManualOverride(false);
   };
 
   const totals = useMemo(() => {

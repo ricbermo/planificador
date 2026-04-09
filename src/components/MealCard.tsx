@@ -1,12 +1,16 @@
 import { FOODS_BY_ID } from '../data/foods';
 import {
   itemGramsP2,
+  mealCarbs,
+  mealCarbsP2,
   mealKcal,
   mealKcalP2,
   mealProtein,
   mealProteinP2,
 } from '../lib/generator';
 import type { Meal, MealSlot } from '../lib/types';
+import { PersonLine } from './PersonLine';
+import { PersonSummary } from './PersonSummary';
 
 interface Props {
   meal: Meal;
@@ -42,8 +46,10 @@ export function MealCard({
   const hasP2 = budgetP2 !== undefined && budgetP2 > 0;
   const kcal = mealKcal(meal);
   const protein = mealProtein(meal);
+  const carbs = mealCarbs(meal);
   const kcal2 = hasP2 ? mealKcalP2(meal) : 0;
   const protein2 = hasP2 ? mealProteinP2(meal) : 0;
+  const carbs2 = hasP2 ? mealCarbsP2(meal) : 0;
 
   const pct = budget > 0 ? Math.round((kcal / budget) * 100) : 0;
   const pct2 = hasP2 && budgetP2 ? Math.round((kcal2 / budgetP2) * 100) : 0;
@@ -77,6 +83,7 @@ export function MealCard({
             kcal={kcal}
             budget={budget}
             protein={protein}
+            carbs={carbs}
             pct={pct}
           />
           {hasP2 && (
@@ -86,6 +93,7 @@ export function MealCard({
               kcal={kcal2}
               budget={budgetP2 ?? 0}
               protein={protein2}
+              carbs={carbs2}
               pct={pct2}
             />
           )}
@@ -103,6 +111,7 @@ export function MealCard({
             const grams = Math.round(food.baseGrams * it.multiplier);
             const k = Math.round(food.kcal * it.multiplier);
             const p = Math.round(food.protein * it.multiplier);
+            const c = Math.round(food.carb * it.multiplier);
             const units = food.unit ? Math.max(1, Math.round(it.multiplier)) : null;
             const unitLabel = food.unit
               ? units === 1
@@ -114,6 +123,7 @@ export function MealCard({
             const grams2 = Math.round(itemGramsP2(it));
             const k2 = Math.round(food.kcal * mult2);
             const p2 = Math.round(food.protein * mult2);
+            const c2 = Math.round(food.carb * mult2);
             const units2 = food.unit && mult2 > 0 ? Math.max(1, Math.round(mult2)) : null;
             const unitLabel2 = food.unit
               ? units2 === 1
@@ -145,6 +155,7 @@ export function MealCard({
                       grams={grams}
                       kcal={k}
                       protein={p}
+                      carbs={c}
                       units={units}
                       unitLabel={unitLabel}
                     />
@@ -155,6 +166,7 @@ export function MealCard({
                         grams={grams2}
                         kcal={k2}
                         protein={p2}
+                        carbs={c2}
                         units={units2}
                         unitLabel={unitLabel2}
                       />
@@ -192,73 +204,5 @@ export function MealCard({
         )}
       </div>
     </article>
-  );
-}
-
-function PersonSummary({
-  name,
-  color,
-  kcal,
-  budget,
-  protein,
-  pct,
-}: {
-  name: string;
-  color: 'blue' | 'rose';
-  kcal: number;
-  budget: number;
-  protein: number;
-  pct: number;
-}) {
-  const tone = color === 'blue' ? 'border-blue-200 bg-blue-50/70' : 'border-rose-200 bg-rose-50/70';
-  const titleTone = color === 'blue' ? 'text-blue-800' : 'text-rose-800';
-
-  const pctTone =
-    pct >= 95 && pct <= 105
-      ? 'text-emerald-700'
-      : pct >= 90 && pct <= 110
-        ? 'text-amber-700'
-        : 'text-rose-700';
-
-  return (
-    <div className={`rounded-lg border px-2.5 py-2 ${tone}`}>
-      <div className={`text-sm font-bold ${titleTone}`}>{name}</div>
-      <div className="text-xs text-slate-700">
-        {Math.round(kcal)} / {budget} kcal ·{' '}
-        <span className={`font-semibold ${pctTone}`}>{pct}%</span>
-      </div>
-      <div className="text-xs text-slate-600">{Math.round(protein)} g proteína</div>
-    </div>
-  );
-}
-
-function PersonLine({
-  label,
-  color,
-  grams,
-  kcal,
-  protein,
-  units,
-  unitLabel,
-}: {
-  label: string;
-  color: 'blue' | 'rose';
-  grams: number;
-  kcal: number;
-  protein: number;
-  units: number | null;
-  unitLabel: string | null;
-}) {
-  const tone = color === 'blue' ? 'text-blue-800 border-blue-100 bg-blue-50/60' : 'text-rose-800 border-rose-100 bg-rose-50/60';
-
-  const amount =
-    units !== null && unitLabel
-      ? `${units} ${unitLabel} (${grams} g)`
-      : `${grams} g`;
-
-  return (
-    <div className={`w-full rounded-md border px-2 py-1 ${tone}`}>
-      <span className="font-semibold">{label}:</span> {amount} · {kcal} kcal · {protein} g prot
-    </div>
   );
 }
