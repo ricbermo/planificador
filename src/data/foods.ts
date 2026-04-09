@@ -191,7 +191,7 @@ export const FOODS: Food[] = [
     baseUnit: '1 (120 g)', baseGrams: 120,
     kcal: 105, protein: 1.3, carb: 27, fat: 0.4,
     tags: ['fruit', 'carb'], meals: ['breakfast'],
-    role: 'extra',
+    role: 'carb',
     minMultiplier: 1, maxMultiplier: 2,
     unit: { singular: 'banana', plural: 'bananas' },
   },

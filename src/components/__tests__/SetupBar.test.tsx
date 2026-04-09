@@ -77,4 +77,19 @@ describe('SetupBar', () => {
     await user.click(autoBtn);
     expect(props.onPerson1ResetAuto).toHaveBeenCalledTimes(1);
   });
+
+  it('suggests target weight, body fat and weeks together', async () => {
+    const user = userEvent.setup();
+    const props = setup();
+
+    await user.click(screen.getByRole('button', { name: /sugerir/i }));
+
+    expect(props.onPerson1MetricsChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        targetWeightKg: expect.any(Number),
+        targetBodyFatPct: expect.any(Number),
+        weeksToGoal: expect.any(Number),
+      }),
+    );
+  });
 });

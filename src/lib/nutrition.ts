@@ -78,8 +78,9 @@ export function computeMacroPlan(m: BodyMetrics): MacroPlan {
   // Macros
   // Proteína: 2.2 g/kg LBM (alto, óptimo en déficit + entrenamiento de fuerza)
   const protein_g = Math.round(2.2 * lbmKg);
-  // Grasa: 0.9 g/kg de peso corporal
-  const fat_g = Math.round(0.9 * m.currentWeightKg);
+  // Grasa: 0.8 g/kg de peso corporal (suficiente para hormonas, deja más
+  // espacio a carbos que alimentan el entrenamiento de fuerza)
+  const fat_g = Math.round(0.8 * m.currentWeightKg);
   // Carbs: el resto
   const proteinKcal = protein_g * 4;
   const fatKcal = fat_g * 9;
@@ -113,6 +114,22 @@ export function computeMacroPlan(m: BodyMetrics): MacroPlan {
 export interface GoalSuggestion {
   targetWeightKg: number;
   targetBodyFatPct: number;
+  weeksToGoal: number;
+}
+
+function suggestSafeWeeksToGoal(currentWeightKg: number, targetWeightKg: number): number {
+  const lossKg = currentWeightKg - targetWeightKg;
+  if (lossKg <= 0) return 12;
+
+  const minLossPerWeekKg = currentWeightKg * 0.005;
+  const maxLossPerWeekKg = currentWeightKg * 0.01;
+  const preferredLossPerWeekKg = currentWeightKg * 0.0075;
+
+  const minWeeks = Math.max(1, Math.ceil(lossKg / maxLossPerWeekKg));
+  const maxWeeks = Math.max(minWeeks, Math.ceil(lossKg / minLossPerWeekKg));
+  const preferredWeeks = Math.max(1, Math.ceil(lossKg / preferredLossPerWeekKg));
+
+  return Math.max(minWeeks, Math.min(maxWeeks, preferredWeeks));
 }
 
 export function suggestGoals(m: {
@@ -145,7 +162,9 @@ export function suggestGoals(m: {
     targetBodyFatPct = age < 30 ? 15 : age < 45 ? 17 : 20;
   }
 
-  return { targetWeightKg, targetBodyFatPct };
+  const weeksToGoal = suggestSafeWeeksToGoal(m.currentWeightKg, targetWeightKg);
+
+  return { targetWeightKg, targetBodyFatPct, weeksToGoal };
 }
 
 export function defaultMetrics(): BodyMetrics {

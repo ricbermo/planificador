@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { computeMacroPlan, isValidMetrics } from '../nutrition';
+import { computeMacroPlan, isValidMetrics, suggestGoals } from '../nutrition';
 import type { BodyMetrics } from '../types';
 
 const baseMetrics: BodyMetrics = {
@@ -85,5 +85,30 @@ describe('isValidMetrics', () => {
     expect(isValidMetrics(undefined)).toBe(false);
     expect(isValidMetrics({ ...baseMetrics, age: 0 })).toBe(false);
     expect(isValidMetrics({ ...baseMetrics, bodyFatPct: 0 })).toBe(false);
+  });
+});
+
+describe('suggestGoals', () => {
+  it('returns a suggested weeksToGoal within ~0.5-1% weekly loss', () => {
+    const currentWeightKg = 100;
+    const suggestion = suggestGoals({
+      age: 35,
+      heightCm: 170,
+      currentWeightKg,
+      bodyFatPct: 30,
+    });
+
+    expect(suggestion).not.toBeNull();
+    if (!suggestion) return;
+
+    expect(typeof suggestion.weeksToGoal).toBe('number');
+    expect(suggestion.weeksToGoal).toBeGreaterThan(0);
+
+    const lossKg = currentWeightKg - suggestion.targetWeightKg;
+    expect(lossKg).toBeGreaterThan(0);
+
+    const weeklyLossPct = (lossKg / suggestion.weeksToGoal / currentWeightKg) * 100;
+    expect(weeklyLossPct).toBeGreaterThanOrEqual(0.5);
+    expect(weeklyLossPct).toBeLessThanOrEqual(1);
   });
 });
